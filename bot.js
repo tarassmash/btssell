@@ -230,7 +230,15 @@ async function cycle(force) {
       const heldH = (Date.now() - opened) / 3600e3;
       state.botPositions.push({ symbol: sym, size: p.size, avg: p.avgPrice, mark: p.markPrice, pnl: +p.unrealisedPnl, sl: p.stopLoss, heldH: +heldH.toFixed(1) });
       if (!+p.stopLoss) { log(`${sym}: нет стопа — ставлю`, 'err'); await setSL(sym, +p.avgPrice); }
-      if (heldH > CFG.maxHoldH) await closeChase(sym, `держим ${heldH.toFixed(1)}ч > ${CFG.maxHoldH}ч`);
+      if (heldH > CFG.maxHoldH) {
+        // в минус по времени не закрываем: только если позиция в плюсе (с запасом на комиссию)
+        const minProfit = +p.positionValue * 0.002;
+        if (+p.unrealisedPnl > minProfit) await closeChase(sym, `держим ${heldH.toFixed(1)}ч > ${CFG.maxHoldH}ч, PnL +${(+p.unrealisedPnl).toFixed(2)}`);
+        else if (!state.holdNote?.[sym] || Date.now() - state.holdNote[sym] > 3600e3) {
+          (state.holdNote ||= {})[sym] = Date.now();
+          log(`${sym}: время вышло, но PnL ${(+p.unrealisedPnl).toFixed(2)} — в минус не закрываю, жду плюс`);
+        }
+      }
     }
     if (!CFG.enabled) return;
     if (CFG.requireBtcUp && !sc.btc.up) { log(`BTC не растёт (${sc.btc.ret.toFixed(2)}% за окно) — новые шорты не открываю`); return; }
