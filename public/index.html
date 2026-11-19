@@ -365,18 +365,8 @@ function extraH(){const s=S();return s.proxy&&s.ptok?{'X-Proxy-Token':s.ptok}:{}
 async function hmac(secret,msg){const enc=new TextEncoder();const k=await crypto.subtle.importKey('raw',enc.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const sg=await crypto.subtle.sign('HMAC',k,enc.encode(msg));return [...new Uint8Array(sg)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 async function pub(path,params={}){const r=await fetch(base()+path+'?'+new URLSearchParams(params),{headers:extraH()});const j=await r.json();if(j.retCode!==0)throw new Error(path+': '+j.retMsg);return j.result;}
-const SRV={serverKeys:false,env:'mainnet'};
-async function loadSrv(){if(!SERVED)return;try{const r=await fetch('/config');Object.assign(SRV,await r.json());
-  if(SRV.serverKeys){$('#s_key').placeholder='берётся с Railway';$('#s_sec').placeholder='берётся с Railway';$('#s_env').value=SRV.env;envTag();tlog(`Ключи Bybit подключены с сервера Railway (${SRV.env})`,'ok');refreshPos();}}catch(e){}}
-const useSrv=()=>{const s=S();return SERVED&&SRV.serverKeys&&!s.key&&!s.sec;};
 async function priv(method,path,params={}){
-  const s=S();
-  if(useSrv()){
-    const qs=method==='GET'?new URLSearchParams(params).toString():'',body=method==='GET'?undefined:JSON.stringify(params);
-    const r=await fetch(location.origin+'/signed/'+s.env+path+(qs?'?'+qs:''),{method,body,headers:{'Content-Type':'application/json'}});
-    const j=await r.json();if(j.retCode!==0){const e=new Error(`${path}: ${j.retCode} ${j.retMsg}`);e.code=j.retCode;throw e;}return j.result;
-  }
-  if(!s.key||!s.sec)throw new Error('Не заданы API ключи: добавь BYBIT_API_KEY / BYBIT_API_SECRET в переменные Railway');
+  const s=S();if(!s.key||!s.sec)throw new Error('Не заданы API Key / Secret (⚙ Торговля Bybit)');
   if(!window.crypto?.subtle)throw new Error('crypto.subtle недоступен — открой файл в Chrome/Firefox');
   const ts=String(Date.now()+TR.offset),rw='10000';
   const qs=method==='GET'?new URLSearchParams(params).toString():'',body=method==='GET'?'':JSON.stringify(params);
@@ -505,7 +495,7 @@ async function uiMarketClose(sym){
   });
 }
 async function refreshPos(){
-  const s=S();if(!useSrv()&&(!s.key||!s.sec))return;
+  const s=S();if(!s.key||!s.sec)return;
   try{const r=await priv('GET','/v5/position/list',{category:'linear',settleCoin:'USDT'});const ps=r.list.filter(p=>+p.size>0);
     $('#pt tbody').innerHTML=ps.length?ps.map(p=>`<tr><td><b>${p.symbol.replace('USDT','')}</b> <span class="${p.side==='Sell'?'neg':'pos'}">${p.side==='Sell'?'SHORT':'LONG'}</span></td><td>${p.size}</td><td>${p.avgPrice}</td><td>${p.markPrice}</td>
       <td class="${+p.unrealisedPnl>=0?'pos':'neg'}">${(+p.unrealisedPnl).toFixed(2)}</td><td>${+p.stopLoss?p.stopLoss:'<span class="neg">нет!</span>'}</td>
@@ -518,7 +508,7 @@ $('#pt').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 $('#posRef').onclick=refreshPos;
 $('#s_test').onclick=()=>guard(async()=>{await syncTime();const r=await priv('GET','/v5/account/wallet-balance',{accountType:'UNIFIED'});
   const a=r.list[0];tlog(`Ключи ОК (${S().env}). Equity: ${(+a.totalEquity).toFixed(2)} USD, доступно: ${(+a.totalAvailableBalance).toFixed(2)} USD, сдвиг времени ${TR.offset} мс`,'ok');refreshPos();});
-loadSet();loadSrv();setInterval(refreshPos,10000);
+loadSet();setInterval(refreshPos,10000);
 
 $('#run').onclick=scan;
 $('#auto').onchange=e=>{clearInterval(timer);if(e.target.checked){timer=setInterval(scan,300000);}};
