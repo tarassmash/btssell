@@ -31,6 +31,10 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(INDEX);
   }
+  if (req.url === '/api/week') {
+    try { const w = await bot.weekSummary(); res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(w)); }
+    catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
   if (req.url.startsWith('/api/summary')) {
     const day = new URL(req.url, 'http://x').searchParams.get('day') || undefined;
     try {

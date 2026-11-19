@@ -283,10 +283,18 @@ function setConfig(o) {
 function start() {
   log(`Бот запущен: ${ENVN}, ключи ${KEY && SEC ? 'есть' : 'НЕ заданы'}, автоторговля ${CFG.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
   setTimeout(loop, 3000);
+  if (KEY && SEC) setTimeout(async () => {
+    try {
+      const w = await weekSummary();
+      log(`📈 7 дней: итог ${w.total >= 0 ? '+' : ''}${w.total} USDT · ` + w.bots.map(b => `${b.name} ${b.pnl >= 0 ? '+' : ''}${b.pnl} (${b.trades} сд.)`).join(' · '));
+      for (const b of w.bots) log(`📈 ${b.name} по дням: ` + Object.entries(b.days).map(([d, v]) => `${d.slice(5)} ${v >= 0 ? '+' : ''}${v}`).join(', '));
+    } catch (e) { log('Сводка 7 дней: ' + e.message, 'err'); }
+  }, 30000);
 }
 async function closeManual(sym, why) {
   if (state.busy) throw new Error('busy'); state.busy = true;
   try { await syncTime(); await closeChase(sym, why); } catch (e) { log(`${sym}: выход — ${e.message}`, 'err'); } finally { state.busy = false; }
 }
+async function weekSummary() { if (!KEY || !SEC) throw new Error('нет ключей Bybit'); await syncTime(); return summary.week(priv); }
 async function daySummary(day) { if (!KEY || !SEC) throw new Error('нет ключей Bybit'); await syncTime(); return summary.summary(priv, day); }
-module.exports = { start, status, daySummary, history: summary.history, equityDays: summary.equityDays, setConfig, cycle: () => cycle(true), closeChase: closeManual, _test: { chase, CFG, state, openShort, cycle } };
+module.exports = { start, status, daySummary, weekSummary, history: summary.history, equityDays: summary.equityDays, setConfig, cycle: () => cycle(true), closeChase: closeManual, _test: { chase, CFG, state, openShort, cycle } };
