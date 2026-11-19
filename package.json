@@ -1,0 +1,9 @@
+{
+  "name": "short-scanner",
+  "version": "1.0.0",
+  "description": "Сканер слабых монет при росте BTC + шорт лимитками с догоном на Bybit",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED"
+}
