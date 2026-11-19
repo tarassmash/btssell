@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { analyze } = require('./lib/analysis');
+const summary = require('./lib/summary');
 
 const BASE = { mainnet: 'https://api.bybit.com', testnet: 'https://api-testnet.bybit.com', demo: 'https://api-demo.bybit.com' };
 const KEY = process.env.BYBIT_API_KEY || '';
@@ -215,6 +216,7 @@ async function cycle(force) {
     state.lastScan = await runScan();
     const sc = state.lastScan;
     if (!KEY || !SEC) { state.botPositions = []; return; }
+    try { state.equity = await summary.tick(priv, log); } catch (e) {}
     const [pos, ords] = await Promise.all([allPositions(), allOrders()]);
     const tagged = ords.filter(o => (o.orderLinkId || '').startsWith('bts-'));
     const botSyms = [...new Set(tagged.map(o => o.symbol))];
@@ -262,7 +264,7 @@ function loop() {
 function status() {
   const sc = state.lastScan;
   return {
-    cfg: CFG, env: ENVN, hasKeys: !!(KEY && SEC), busy: state.busy, nextRun: state.nextRun,
+    cfg: CFG, env: ENVN, equity: state.equity ?? null, hasKeys: !!(KEY && SEC), busy: state.busy, nextRun: state.nextRun,
     scan: sc && { time: sc.time, btc: sc.btc, rows: sc.rows.slice(0, 25).map(r => ({ symbol: r.symbol, score: r.score, stxt: r.stxt, status: r.status, rel: r.rel, upCap: r.upCap, rsi: r.rsi })) },
     positions: state.botPositions, logs: state.logs.slice(0, 150),
   };
@@ -286,4 +288,5 @@ async function closeManual(sym, why) {
   if (state.busy) throw new Error('busy'); state.busy = true;
   try { await syncTime(); await closeChase(sym, why); } catch (e) { log(`${sym}: выход — ${e.message}`, 'err'); } finally { state.busy = false; }
 }
-module.exports = { start, status, setConfig, cycle: () => cycle(true), closeChase: closeManual, _test: { chase, CFG, state, openShort, cycle } };
+async function daySummary(day) { if (!KEY || !SEC) throw new Error('нет ключей Bybit'); await syncTime(); return summary.summary(priv, day); }
+module.exports = { start, status, daySummary, history: summary.history, equityDays: summary.equityDays, setConfig, cycle: () => cycle(true), closeChase: closeManual, _test: { chase, CFG, state, openShort, cycle } };

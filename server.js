@@ -31,6 +31,15 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(INDEX);
   }
+  if (req.url.startsWith('/api/summary')) {
+    const day = new URL(req.url, 'http://x').searchParams.get('day') || undefined;
+    try {
+      if (day && !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('day=YYYY-MM-DD');
+      const s = await bot.daySummary(day);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({ ...s, equityDays: bot.equityDays() }));
+    } catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
   if (req.url.startsWith('/api/bot/')) {
     const send = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
     let body = ''; for await (const c of req) body += c;

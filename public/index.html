@@ -120,6 +120,13 @@ button.grn{background:#1a5c2a;border-color:#2ea043}
       <div class="det" id="det"><p class="note">Выбери монету в таблице — будет график цены с EMA, линией силы против BTC и уровнями входа/стопа/тейков.</p></div>
     </div>
   </div>
+  <div class="card" id="sumCard" style="display:none">
+    <h2>📊 Заработал / потерял — все боты аккаунта <span class="note" id="sumNote"></span></h2>
+    <div style="padding:12px">
+      <div class="tbtns" id="sumDays"></div>
+      <div id="sumBody" class="note">Загружаю…</div>
+    </div>
+  </div>
   <div class="card" id="botCard" style="display:none">
     <h2>🤖 Автобот 24/7 (на сервере Railway) <span id="botSt" class="note"></span></h2>
     <div style="padding:12px">
@@ -539,7 +546,7 @@ loadSet();setInterval(refreshPos,10000);
 const BF=['maxPos','usd','lev','minScore','slPct','maxHoldH','scanMin','cooldownH'];let botCfgLoaded=false,botCfg=null;
 async function botApi(p,body){const r=await fetch(p,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j;}
 function botRender(st){
-  botCfg=st.cfg;$('#botCard').style.display='';
+  botCfg=st.cfg;window._lastEq=st.equity;$('#botCard').style.display='';
   $('#botSt').innerHTML=` · ${st.env.toUpperCase()} · ключи: ${st.hasKeys?'<span class="pos">есть</span>':'<span class="neg">не заданы в Railway</span>'} · автоторговля: ${st.cfg.enabled?'<b class="pos">ВКЛ</b>':'<b class="neg">ВЫКЛ</b>'}${st.busy?' · <span class="note">работает…</span>':''}`;
   $('#botToggle').textContent=st.cfg.enabled?'⏸ Выключить автоторговлю':'▶ Включить автоторговлю';$('#botToggle').className=st.cfg.enabled?'':'red';
   if(!botCfgLoaded){BF.forEach(k=>$('#b_'+k).value=st.cfg[k]);$('#b_btc').checked=st.cfg.requireBtcUp;botCfgLoaded=true;}
@@ -558,6 +565,30 @@ $('#bpt').addEventListener('click',async e=>{const b=e.target.closest('button');
   if(!await ask('Закрыть '+s,'Бот откупит позицию лимиткой с догоном, через 30 с остаток — маркетом.'))return;
   try{await botApi('/api/bot/close',{symbol:s});tlog(s+': закрытие запущено','ok');}catch(e){tlog('Бот: '+e.message,'e');}});
 if(SERVED){botPoll();setInterval(botPoll,10000);}
+
+/* ---------- Дневная сводка ---------- */
+let sumDay=null;
+const madridDay=(d=new Date())=>new Date(d.toLocaleString('en-US',{timeZone:'Europe/Madrid'})).toLocaleDateString('sv-SE');
+function sumDaysUI(){const t=new Date();const days=[...Array(7)].map((_,i)=>madridDay(new Date(t-i*86400e3)));
+  $('#sumDays').innerHTML=days.map((d,i)=>`<button data-d="${d}" class="${d===sumDay?'grn':''}">${i===0?'Сегодня':i===1?'Вчера':d.slice(5).split('-').reverse().join('.')}</button>`).join('');}
+$('#sumDays').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;sumDay=b.dataset.d;loadSum();});
+const usd=v=>`<b class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(2)}</b>`;
+async function loadSum(){
+  sumDay=sumDay||madridDay();sumDaysUI();$('#sumCard').style.display='';
+  try{const r=await fetch('/api/summary?day='+sumDay);const s=await r.json();if(!r.ok)throw new Error(s.error);
+    const eqDays=s.equityDays||{},next=Object.keys(eqDays).sort().find(d=>d>s.day);
+    const eqS=eqDays[s.day],eqE=next?eqDays[next]:(botCfg&&window._lastEq);
+    $('#sumNote').textContent=`· обновлено ${new Date(s.generated).toLocaleTimeString()}`;
+    $('#sumBody').innerHTML=`<p style="margin:0 0 8px">Итог дня: ${usd(s.total)} USDT · закрыто сделок: ${s.trades}`+
+      (eqS!=null?` · депозит на начало дня ${eqS}${eqE?` → ${(+eqE).toFixed(2)} (${usd(eqE-eqS)})`:''}`:'')+`</p>`+
+      (s.bots.length?`<table><thead><tr><th>Бот</th><th>Заработал / потерял</th><th>Сделок</th><th>В плюс</th><th>В минус</th><th>Из них стопом</th><th>Лучшая</th><th>Худшая</th><th>Монеты (от худшей)</th></tr></thead><tbody>`+
+      s.bots.map(b=>`<tr><td><b>${b.name}</b></td><td>${usd(b.pnl)}</td><td>${b.trades}</td><td class="pos">${b.wins}</td><td class="neg">${b.losses}</td><td>${b.stops}</td>
+        <td>${b.best?b.best.symbol+' '+usd(b.best.pnl):''}</td><td>${b.worst?b.worst.symbol+' '+usd(b.worst.pnl):''}</td>
+        <td style="text-align:left;white-space:normal">${b.coins.map(c=>`${c.symbol} <span class="${c.pnl>=0?'pos':'neg'}">${c.pnl>=0?'+':''}${c.pnl.toFixed(2)}</span>`).join(', ')}</td></tr>`).join('')+`</tbody></table>`:'<p class="mut">Закрытых сделок нет</p>')+
+      `<p class="note">PnL — реализованный, с комиссиями, по данным биржи (закрытые позиции). Открытые позиции и funding не входят. День — по времени Мадрида.</p>`;
+  }catch(e){$('#sumBody').innerHTML=`<span class="neg">${e.message}</span>`;}
+}
+if(SERVED){loadSum();setInterval(()=>{if(sumDay===madridDay())loadSum();},120000);}
 $('#run').onclick=scan;
 $('#auto').onchange=e=>{clearInterval(timer);if(e.target.checked){timer=setInterval(scan,300000);}};
 </script>
